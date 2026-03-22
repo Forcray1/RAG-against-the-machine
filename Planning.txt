@@ -1,2 +1,25 @@
+Next to learn / do :
+Indexation et Retrieval (Le "Cerveau")
+C'est ici que tu gagnes ou perds tes points de Recall@k.
+Ordre :
+Indexer : Créer l'index BM25 (recommandé) ou TF-IDF à partir des chunks. Sauvegarder cet index dans data/processed/.
+Searcher : Coder la fonction qui prend une query et renvoie les $k$ meilleurs chunks.
+CLI (Partie 1) : Implémenter les commandes index et search avec fire.
+Notions à maîtriser :
+Algorithme BM25 : Comprendre la fréquence des termes et la saturation.
+Persistance : Sauvegarder des objets Python (via pickle ou le format natif de la lib BM25).
+
+
 Chunking :
+
+	Parsing all of the .py and .md files iof the llm to make it a list of MinimalSource wich contains all informations contained by the LLM,
+	under the form of structure of less than 2000 characters by default, and editable.
+
+	For the python chunker, we parse all functions and classes, and if we encounter one larger than our max_chunk_size, we split it in smaller chunk
+
+	For the md chunker, the core logic is the same but we parse by using titles (#, ##, ###) and we keep the same method of spliting in smaller chunks
+	if it's larger than the largest amount we accept.
+
+	They're both classes wich heritate from the abstract class BaseChunker, wich contain an abstract method of chunk sorting, and the function _split_large_text
+	wich is the functiun for spliting in smaller chunks, wich is common to both the chunkers classes
 

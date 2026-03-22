@@ -14,7 +14,7 @@ class BaseChunker(ABC):
     @abstractmethod
     def chunk(self, file_path: str, content: str) -> list[tuple[MinimalSource, str]]:
         pass
-	
+
 	def _split_large_text(self, text: str, start_offset: int, file_path: str) -> List[tuple[MinimalSource, str]]:
 		sub_chunks = []
 		current_pos = 0
