@@ -3,40 +3,40 @@ from typing import List, Tuple
 import ast
 import re
 
-from models import MinimalSource
+from src.models import MinimalSource
 
 
 class BaseChunker(ABC):
     def __init__(self, max_chunk_size: int = 2000, overlap: int = 200):
         self.max_chunk_size = max_chunk_size
-		self.overlap = overlap
+        self.overlap = overlap
 
     @abstractmethod
     def chunk(self, file_path: str, content: str) -> list[tuple[MinimalSource, str]]:
         pass
 
-	def _split_large_text(self, text: str, start_offset: int, file_path: str) -> List[tuple[MinimalSource, str]]:
-		sub_chunks = []
-		current_pos = 0
-		
-		while current_pos < len(text):
-			end_pos = min(current_pos + self.max_chunk_size, len(text))
+    def _split_large_text(self, text: str, start_offset: int, file_path: str) -> List[tuple[MinimalSource, str]]:
+        sub_chunks = []
+        current_pos = 0
+        
+        while current_pos < len(text):
+            end_pos = min(current_pos + self.max_chunk_size, len(text))
 
-			sub_text = text[current_pos:end_pos]
+            sub_text = text[current_pos:end_pos]
 
-			source = MinimalSource(
-				file_path=file_path,
-				first_character_index=start_offset + current_pos,
-				last_character_index=start_offset + end_pos
-			)
-			
-			sub_chunks.append((source, sub_text))
+            source = MinimalSource(
+                file_path=file_path,
+                first_character_index=start_offset + current_pos,
+                last_character_index=start_offset + end_pos
+            )
+            
+            sub_chunks.append((source, sub_text))
 
-			if end_pos == len(text):
-				break
-			current_pos += (self.max_chunk_size - self.overlap)
+            if end_pos == len(text):
+                break
+            current_pos += (self.max_chunk_size - self.overlap)
 
-		return sub_chunks
+        return sub_chunks
 
 
 class PythonChunker(BaseChunker):
@@ -63,7 +63,7 @@ class PythonChunker(BaseChunker):
 
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
-				end_line = node.end_lineno if node.end_lineno is not None else node.lineno
+                end_line = node.end_lineno if node.end_lineno is not None else node.lineno
                 end_col = node.end_col_offset if node.end_col_offset is not None else 0
 
                 start_char = self._line_to_char(line_map, node.lineno, node.col_offset)
@@ -72,17 +72,17 @@ class PythonChunker(BaseChunker):
                 chunk_text = content[start_char:end_char]
                 
                 if len(chunk_text) > self.max_chunk_size:
-					sub_chunks = self._split_large_text(chunk_text, start_char, file_path)
+                    sub_chunks = self._split_large_text(chunk_text, start_char, file_path)
                     chunks.extend(sub_chunks)
                 else:
-					source = MinimalSource(
-						file_path=file_path,
-						first_character_index=start_char,
-						last_character_index=end_char
-					)
-					chunks.append((source, chunk_text))
+                    source = MinimalSource(
+                        file_path=file_path,
+                        first_character_index=start_char,
+                        last_character_index=end_char
+                    )
+                    chunks.append((source, chunk_text))
         
-		if not chunks and content.strip():
+        if not chunks and content.strip():
             return self._split_large_text(content, 0, file_path)
 
         return chunks
@@ -95,7 +95,7 @@ class MdChunker(BaseChunker):
         if not headers:
             return self._split_large_text(content, 0, file_path)
 
-		if headers[0].start() > 0:
+        if headers[0].start() > 0:
             intro_text = content[0:headers[0].start()]
             if intro_text.strip():
                 chunks.extend(self._split_large_text(intro_text, 0, file_path))

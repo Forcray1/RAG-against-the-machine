@@ -23,3 +23,8 @@ Chunking :
 	They're both classes wich heritate from the abstract class BaseChunker, wich contain an abstract method of chunk sorting, and the function _split_large_text
 	wich is the functiun for spliting in smaller chunks, wich is common to both the chunkers classes
 
+BM25 :
+	search and give a "score" based on the amount of time each words appear to give the toppic of the chunk, but do take care about the increase amount,
+	as an exemple, if we go from 20times a words to 100, it will not take it as such an increase, 'cause it already determine we were speaking about that, and will
+	go look for new words occurences, or thing more relatable not counting only on occurences and size of the chunk.
+

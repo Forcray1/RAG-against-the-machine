@@ -1,5 +1,5 @@
 PYTHON = python3
-MODULE = src.main
+MODULE = src.__main__
 
 install:
 	uv sync
