@@ -9,7 +9,7 @@ class Ingestor:
         self.py_chunker = PythonChunker(max_chunk_size, overlap)
         self.md_chunker = MdChunker(max_chunk_size, overlap)
         self.exclude_dirs = {".git", "__pycache__", "build", "dist", "venv", ".venv", "tests"}
-    
+
     def is_ignored(self, path: pathlib.Path) -> bool:
         return any(part in self.exclude_dirs for part in path.parts)
 
