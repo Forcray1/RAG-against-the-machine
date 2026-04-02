@@ -5,6 +5,9 @@ from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
 
 def main():
+    """
+    Main execution script for the RAG-against-the-machine project.
+    """
     DATA_PATH = "vllm-0.10.1" 
     INDEX_PATH = "data/index_vllm"
     CHUNK_SIZE = 1500

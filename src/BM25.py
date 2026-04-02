@@ -6,12 +6,18 @@ from typing import List, Tuple, Optional
 from src.models import MinimalSource
 
 class SearchEngine:
+    """
+    BM25 implementation handling tokenization, document indexing, saving, and retrieval.
+    This links raw string segments with their Pydantic source definitions.
+    """
     def __init__(self):
         self.retriever: Optional[bm25s.BM25] = None
         self.sources: List[MinimalSource] = []
 
     def _tokenize(self, texts: List[str]):
-        """Nettoie et découpe le texte pour le moteur de recherche."""
+        """
+        Cleans and splits texts recursively for building the 
+        """
         return bm25s.tokenize(
             texts, 
             lower=True,
@@ -19,7 +25,10 @@ class SearchEngine:
         )
 
     def build_index(self, texts: List[str], sources: List[MinimalSource]) -> None:
-        """Crée l'index BM25 à partir des textes et conserve les sources."""
+        """
+        Constructs the search index with the provided string documents mapping to 
+        metadata schemas.
+        """
         self.sources = sources
         corpus_tokens = self._tokenize(texts)
 
@@ -28,34 +37,42 @@ class SearchEngine:
         print(f"Indexation terminée : {len(texts)} chunks indexés.")
 
     def save(self, path: str) -> None:
-        """Sauvegarde l'index BM25 et les sources sur le disque."""
+        """
+        Dumps the built BM25 index and properties to a specified local directory.
+        """
         save_dir = Path(path)
         save_dir.mkdir(parents=True, exist_ok=True)
 
         if self.retriever:
-            # bm25s crée ses propres fichiers dans le dossier
+            # bm25s creates its own files in this dir
             self.retriever.save(save_dir)
 
-        # Sauvegarde de la liste des objets MinimalSource
+        # Save list of MinimalSource objects
         with open(save_dir / "sources.pkl", "wb") as f:
             pickle.dump(self.sources, f)
         print(f"Index et sources sauvegardés dans {path}")
 
     def load(self, path: str) -> None:
+        """
+        Reloads index matrices and minimal sources from serialized directory storage.
+        """
         load_dir = Path(path)
         if not load_dir.exists():
             raise FileNotFoundError(f"Le dossier d'index {path} n'existe pas.")
 
-        # Charger l'index BM25
+        # Load BM25 index
         self.retriever = bm25s.BM25.load(load_dir, load_corpus=True)
 
-        # Charger les sources
+        # Load sources
         with open(load_dir / "sources.pkl", "rb") as f:
             self.sources = pickle.load(f)
         print(f"Index chargé : {len(self.sources)} chunks prêts.")
 
     def query(self, user_query: str, top_k: int = 5) -> List[Tuple[MinimalSource, str, float]]:
-        """Recherche les k meilleurs chunks pour une question donnée."""
+        """
+        Queries the engine for matches retrieving both the text document, origin,
+        and its BM25 matching coefficient.
+        """
         if not self.retriever or not self.sources:
             raise ValueError("L'index n'est pas initialisé ou chargé.")
 

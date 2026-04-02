@@ -5,15 +5,26 @@ from src.chunkers import PythonChunker, MdChunker
 from src.models import MinimalSource
 
 class Ingestor:
+    """
+    Handles file ingestion and dispatching to correct chunkers based on extension.
+    It builds a combined and flattened list of all textual snippets and source data.
+    """
     def __init__(self, max_chunk_size: int = 2000, overlap: int = 200):
         self.py_chunker = PythonChunker(max_chunk_size, overlap)
         self.md_chunker = MdChunker(max_chunk_size, overlap)
         self.exclude_dirs = {".git", "__pycache__", "build", "dist", "venv", ".venv", "tests"}
 
     def is_ignored(self, path: pathlib.Path) -> bool:
+        """
+        Determines if the current file path overlaps with an ignored directory.
+        """
         return any(part in self.exclude_dirs for part in path.parts)
 
     def run(self, root_dir: str) -> Tuple[List[str], List["MinimalSource"]]:
+        """
+        Loops over a directory structure, delegating to the precise chunkers.
+        Iterates files recursively unless ignored.
+        """
         all_texts = []
         all_sources = []
         root = pathlib.Path(root_dir)

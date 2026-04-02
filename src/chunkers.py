@@ -7,15 +7,25 @@ from src.models import MinimalSource
 
 
 class BaseChunker(ABC):
+    """
+    Abstract base class for chunkers, which split text into smaller chunks.
+    """
     def __init__(self, max_chunk_size: int = 2000, overlap: int = 200):
         self.max_chunk_size = max_chunk_size
         self.overlap = overlap
 
     @abstractmethod
     def chunk(self, file_path: str, content: str) -> list[tuple[MinimalSource, str]]:
+        """
+        Splits the given text content into chunks along with source metadata.
+        """
         pass
 
     def _split_large_text(self, text: str, start_offset: int, file_path: str) -> List[tuple[MinimalSource, str]]:
+        """
+        Splits a text strictly by size and overlap limit. 
+        Helper mainly for fallback mechanism and non-semantic chunking.
+        """
         sub_chunks = []
         current_pos = 0
         
@@ -40,6 +50,10 @@ class BaseChunker(ABC):
 
 
 class PythonChunker(BaseChunker):
+    """
+    A chunker specifically designed for parsing and chunking Python code files.
+    Exploits the AST structure directly to split by class/function declarations.
+    """
     def _build_line_map(self, content: str) -> list[int]:
         line_starts = [0]
         for i, char in enumerate(content):
@@ -53,6 +67,10 @@ class PythonChunker(BaseChunker):
         return line_map[line - 1] + col
 
     def chunk(self, file_path: str, content: str) -> List[Tuple[MinimalSource, str]]:
+        """
+        Chunks the Python script logically according to definitions, 
+        and falls back to naive split for large definitions or generic script contents.
+        """
         chunks: List[Tuple[MinimalSource, str]] = []
         line_map = self._build_line_map(content)
         
@@ -88,7 +106,14 @@ class PythonChunker(BaseChunker):
         return chunks
 
 class MdChunker(BaseChunker):
+    """
+    A simple Markdown parser and chunker, segmenting by header sections.
+    """
     def chunk(self, file_path: str, content: str) -> List[Tuple[MinimalSource, str]]:
+        """
+        Extracts sections based on markdown heading patterns. Falls back to naive text
+        split for extremely long chapters without intermediate markdown heads.
+        """
         chunks: List[Tuple[MinimalSource, str]] = []
         headers = list(re.finditer(r'^(#{1,6}\s+.+)$', content, re.MULTILINE))
         
