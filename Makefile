@@ -13,8 +13,8 @@ debug:
 clean:
 	rm -rf data/processed/*
 	rm -rf data/output/*
+	rm -rf data/index_vllm
 	rm -rf .venv
-	rm -rf uv.lock
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type d -name ".mypy_cache" -exec rm -rf {} +
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
