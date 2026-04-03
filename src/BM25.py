@@ -76,13 +76,13 @@ class SearchEngine:
         if not self.retriever or not self.sources:
             raise ValueError("L'index n'est pas initialisé ou chargé.")
 
-        # 1. Tokenisation de la requête
+        # 1. Tokenisation
         query_tokens = self._tokenize([user_query])
 
-        # 2. Récupération des résultats (format tuple ou objet)
+        # 2. rettrieve result (tuple or object)
         results = self.retriever.retrieve(query_tokens, k=top_k)
 
-        # 3. Extraction des matrices
+        # 3. matrice extraction
         if isinstance(results, tuple):
             indices_matrice, scores_matrice = results
         else:
@@ -94,7 +94,7 @@ class SearchEngine:
 
         final_results = []
         for i in range(len(indices_top)):
-            # Extraction de l'index (gestion du format dictionnaire si besoin)
+            # Index extraction
             val = indices_top[i]
             idx = int(val.get('id', val.get('index', 0))) if isinstance(val, dict) else int(val)
             
@@ -103,7 +103,7 @@ class SearchEngine:
 
             raw_content = self.retriever.corpus[idx]
             
-            # Si le corpus est stocké sous forme de liste de tokens, on les rejoint
+            # If corpus stocked by a list of token, join them
             if isinstance(raw_content, list):
                 text = " ".join(raw_content)
             else:
