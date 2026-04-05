@@ -1,5 +1,5 @@
 Next to learn / do :
-Manque la génération de réponse, le Recall@k, Le traitement de Datasets 
+Manque la génération de réponse, le Recall@k, Le traitement de Datasets
 CLI a mettre a jour pour les dernières commandes
 
 Chunking :
