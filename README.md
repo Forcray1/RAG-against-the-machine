@@ -1,6 +1,6 @@
 *This project has been created as part of the 42 curriculum by mlorenzo.*
 
-# RAG Against the Machine: Will You Answer My Questions?
+# RAG Against the Machine
 
 ## Description
 This project implements a complete **Retrieval-Augmented Generation (RAG)** system entirely from scratch to interrogate and interact with the **vLLM codebase**. The goal is to ingest raw Python code and Markdown documentation, organize it into a searchable index, retrieve the most scientifically relevant context snippets for a given question, and generate human-readable answers using a localized Large Language Model (Qwen/Qwen3-0.6B).
