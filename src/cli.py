@@ -6,6 +6,9 @@ from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
 from src.models import RagDataset, StudentSearchResults, MinimalSearchResults
 
+sys.path.append(str(Path(__file__).parent.parent / "vllm-0.10.1"))
+from vllm import LLM, SamplingParams
+
 DATA_PATH_DEFAULT = "vllm-0.10.1"
 INDEX_PATH_DEFAULT = "data/index_vllm"
 
@@ -159,8 +162,37 @@ class RagCLI:
         """
         Answer a single question with context passed to the LLM.
         """
-        print(f"[TODO] Implement answer generation for query: '{query}' "
-              f"with top_{k} context chunks")
+        model = LLM(model="Qwen/Qwen3-0.6B")
+        engine = SearchEngine()
+        if not Path(index_path).exists():
+            print(f"ERROR: Index not found at {index_path}. "
+                  f"Please run the 'index' command first.")
+            return
+
+        print(f"--- Loading existing index from {index_path} ---")
+        engine.load(index_path)
+        print(f"SEARCHING FOR: '{query}'")
+
+        try:
+            results = engine.query(query, top_k=k)
+        except Exception as e:
+            print(f"ERROR during query: {e}")
+            return 
+        
+        context_text = "\n\n".join([text for _, text, _ in results])
+        prompt = f"""Tu es un assistant utile. Réponds UNIQUEMENT à partir du contexte suivant.
+
+        CONTEXTE:
+        {context_text}
+
+        QUESTION: {query}
+
+        RÉPONSE:"""
+
+        outputs = model.generate([prompt], SamplingParams)
+        generated_text = outputs[0].outputs[0].text
+        print("\n--- RÉPONSE GÉNÉRÉE ---")
+        print(generated_text)
 
     def answer_dataset(self,
                        student_search_results_path: str,
