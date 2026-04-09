@@ -5,9 +5,11 @@ from typing import List, Tuple, Optional
 
 from src.models import MinimalSource
 
+
 class SearchEngine:
     """
-    BM25 implementation handling tokenization, document indexing, saving, and retrieval.
+    BM25 implementation handling tokenization,
+    document indexing, saving, and retrieval.
     This links raw string segments with their Pydantic source definitions.
     """
     def __init__(self):
@@ -16,18 +18,22 @@ class SearchEngine:
 
     def _tokenize(self, texts: List[str]):
         """
-        Cleans and splits texts recursively for building the 
+        Cleans and splits texts recursively for building the
         """
         return bm25s.tokenize(
-            texts, 
+            texts,
             lower=True,
             show_progress=True
         )
 
-    def build_index(self, texts: List[str], sources: List[MinimalSource]) -> None:
+    def build_index(
+            self,
+            texts: List[str],
+            sources: List[MinimalSource]
+            ) -> None:
         """
-        Constructs the search index with the provided string documents mapping to 
-        metadata schemas.
+        Constructs the search index with the provided string documents
+        mapping to metadata schemas.
         """
         self.sources = sources
         corpus_tokens = self._tokenize(texts)
@@ -38,7 +44,8 @@ class SearchEngine:
 
     def save(self, path: str) -> None:
         """
-        Dumps the built BM25 index and properties to a specified local directory.
+        Dumps the built BM25 index and properties to a specified local
+        directory.
         """
         save_dir = Path(path)
         save_dir.mkdir(parents=True, exist_ok=True)
@@ -54,7 +61,8 @@ class SearchEngine:
 
     def load(self, path: str) -> None:
         """
-        Reloads index matrices and minimal sources from serialized directory storage.
+        Reloads index matrices and minimal sources from serialized directory
+        storage.
         """
         load_dir = Path(path)
         if not load_dir.exists():
@@ -68,9 +76,13 @@ class SearchEngine:
             self.sources = pickle.load(f)
         print(f"Index chargé : {len(self.sources)} chunks prêts.")
 
-    def query(self, user_query: str, top_k: int = 5) -> List[Tuple[MinimalSource, str, float]]:
+    def query(self,
+              user_query: str,
+              top_k: int = 5
+              ) -> List[Tuple[MinimalSource, str, float]]:
         """
-        Queries the engine for matches retrieving both the text document, origin,
+        Queries the engine for matches retrieving both the text document,
+        origin,
         and its BM25 matching coefficient.
         """
         if not self.retriever or not self.sources:
@@ -86,7 +98,9 @@ class SearchEngine:
         if isinstance(results, tuple):
             indices_matrice, scores_matrice = results
         else:
-            indices_matrice = getattr(results, 'indices', results.get('indices'))
+            indices_matrice = getattr(results,
+                                      'indices',
+                                      results.get('indices'))
             scores_matrice = getattr(results, 'scores', results.get('scores'))
 
         indices_top = indices_matrice[0]
@@ -96,19 +110,21 @@ class SearchEngine:
         for i in range(len(indices_top)):
             # Index extraction
             val = indices_top[i]
-            idx = int(val.get('id', val.get('index', 0))) if isinstance(val, dict) else int(val)
-            
+            idx = int(val.get('id', val.get(
+                'index',
+                0))) if isinstance(val, dict) else int(val)
+
             score = float(scores_top[i])
             source = self.sources[idx]
 
             raw_content = self.retriever.corpus[idx]
-            
+
             # If corpus stocked by a list of token, join them
             if isinstance(raw_content, list):
                 text = " ".join(raw_content)
             else:
                 text = str(raw_content)
-            
+
             final_results.append((source, text, score))
 
         return final_results

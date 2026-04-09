@@ -15,20 +15,25 @@ class BaseChunker(ABC):
         self.overlap = overlap
 
     @abstractmethod
-    def chunk(self, file_path: str, content: str) -> list[tuple[MinimalSource, str]]:
+    def chunk(self,
+              file_path: str,
+              content: str) -> list[tuple[MinimalSource, str]]:
         """
         Splits the given text content into chunks along with source metadata.
         """
         pass
 
-    def _split_large_text(self, text: str, start_offset: int, file_path: str) -> List[tuple[MinimalSource, str]]:
+    def _split_large_text(self,
+                          text: str,
+                          start_offset: int,
+                          file_path: str) -> List[tuple[MinimalSource, str]]:
         """
-        Splits a text strictly by size and overlap limit. 
+        Splits a text strictly by size and overlap limit.
         Helper mainly for fallback mechanism and non-semantic chunking.
         """
         sub_chunks = []
         current_pos = 0
-        
+
         while current_pos < len(text):
             end_pos = min(current_pos + self.max_chunk_size, len(text))
 
@@ -39,7 +44,7 @@ class BaseChunker(ABC):
                 first_character_index=start_offset + current_pos,
                 last_character_index=start_offset + end_pos
             )
-            
+
             sub_chunks.append((source, sub_text))
 
             if end_pos == len(text):
@@ -52,7 +57,8 @@ class BaseChunker(ABC):
 class PythonChunker(BaseChunker):
     """
     A chunker specifically designed for parsing and chunking Python code files.
-    Exploits the AST structure directly to split by class/function declarations.
+    Exploits the AST structure directly to split by class/function
+    declarations.
     """
     def _build_line_map(self, content: str) -> list[int]:
         line_starts = [0]
@@ -61,36 +67,51 @@ class PythonChunker(BaseChunker):
                 line_starts.append(i + 1)
         return line_starts
 
-    def _line_to_char(self, line_map: list[int], line: int | None, col: int | None) -> int:
+    def _line_to_char(self,
+                      line_map: list[int],
+                      line: int | None,
+                      col: int | None) -> int:
         if line is None or col is None:
             return 0
         return line_map[line - 1] + col
 
-    def chunk(self, file_path: str, content: str) -> List[Tuple[MinimalSource, str]]:
+    def chunk(self,
+              file_path: str,
+              content: str) -> List[Tuple[MinimalSource, str]]:
         """
-        Chunks the Python script logically according to definitions, 
-        and falls back to naive split for large definitions or generic script contents.
+        Chunks the Python script logically according to definitions,
+        and falls back to naive split for large definitions or generic
+        script contents.
         """
         chunks: List[Tuple[MinimalSource, str]] = []
         line_map = self._build_line_map(content)
-        
+
         try:
             tree = ast.parse(content)
         except SyntaxError:
             return self._split_large_text(content, 0, file_path)
 
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
-                end_line = node.end_lineno if node.end_lineno is not None else node.lineno
-                end_col = node.end_col_offset if node.end_col_offset is not None else 0
+            if isinstance(node,
+                          (ast.FunctionDef,
+                           ast.ClassDef,
+                           ast.AsyncFunctionDef)):
+                end_line = (node.end_lineno if node.end_lineno is not None
+                            else node.lineno)
+                end_col = (node.end_col_offset
+                           if node.end_col_offset is not None else 0)
 
-                start_char = self._line_to_char(line_map, node.lineno, node.col_offset)
+                start_char = self._line_to_char(
+                    line_map, node.lineno, node.col_offset
+                )
                 end_char = self._line_to_char(line_map, end_line, end_col)
 
                 chunk_text = content[start_char:end_char]
-                
+
                 if len(chunk_text) > self.max_chunk_size:
-                    sub_chunks = self._split_large_text(chunk_text, start_char, file_path)
+                    sub_chunks = self._split_large_text(chunk_text,
+                                                        start_char,
+                                                        file_path)
                     chunks.extend(sub_chunks)
                 else:
                     source = MinimalSource(
@@ -99,24 +120,28 @@ class PythonChunker(BaseChunker):
                         last_character_index=end_char
                     )
                     chunks.append((source, chunk_text))
-        
+
         if not chunks and content.strip():
             return self._split_large_text(content, 0, file_path)
 
         return chunks
 
+
 class MdChunker(BaseChunker):
     """
     A simple Markdown parser and chunker, segmenting by header sections.
     """
-    def chunk(self, file_path: str, content: str) -> List[Tuple[MinimalSource, str]]:
+    def chunk(self,
+              file_path: str,
+              content: str) -> List[Tuple[MinimalSource, str]]:
         """
-        Extracts sections based on markdown heading patterns. Falls back to naive text
-        split for extremely long chapters without intermediate markdown heads.
+        Extracts sections based on markdown heading patterns. Falls back to
+        naive text split for extremely long chapters without intermediate
+        markdown heads.
         """
         chunks: List[Tuple[MinimalSource, str]] = []
         headers = list(re.finditer(r'^(#{1,6}\s+.+)$', content, re.MULTILINE))
-        
+
         if not headers:
             return self._split_large_text(content, 0, file_path)
 
@@ -136,7 +161,9 @@ class MdChunker(BaseChunker):
             section_text = content[start_pos:end_pos]
 
             if len(section_text) > self.max_chunk_size:
-                chunks.extend(self._split_large_text(section_text, start_pos, file_path))
+                chunks.extend(self._split_large_text(section_text,
+                                                     start_pos,
+                                                     file_path))
             else:
                 source = MinimalSource(
                     file_path=file_path,
@@ -144,5 +171,5 @@ class MdChunker(BaseChunker):
                     last_character_index=end_pos
                 )
                 chunks.append((source, section_text))
-                
+
         return chunks

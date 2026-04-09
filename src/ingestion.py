@@ -4,15 +4,23 @@ from typing import List, Tuple
 from src.chunkers import PythonChunker, MdChunker
 from src.models import MinimalSource
 
+
 class Ingestor:
     """
-    Handles file ingestion and dispatching to correct chunkers based on extension.
-    It builds a combined and flattened list of all textual snippets and source data.
+    Handles file ingestion and dispatching to correct chunkers based on
+    extension. It builds a combined and flattened list of all textual
+    snippets and source data.
     """
     def __init__(self, max_chunk_size: int = 2000, overlap: int = 200):
         self.py_chunker = PythonChunker(max_chunk_size, overlap)
         self.md_chunker = MdChunker(max_chunk_size, overlap)
-        self.exclude_dirs = {".git", "__pycache__", "build", "dist", "venv", ".venv", "tests"}
+        self.exclude_dirs = {".git",
+                             "__pycache__",
+                             "build",
+                             "dist",
+                             "venv",
+                             ".venv",
+                             "tests"}
 
     def is_ignored(self, path: pathlib.Path) -> bool:
         """
@@ -44,7 +52,7 @@ class Ingestor:
                 if file_path.suffix == ".py":
                     content = file_path.read_text(encoding="utf-8")
                     chunks = self.py_chunker.chunk(display_path, content)
-                    
+
                 elif file_path.suffix == ".md":
                     content = file_path.read_text(encoding="utf-8")
                     chunks = self.md_chunker.chunk(display_path, content)
@@ -57,5 +65,5 @@ class Ingestor:
                 if text.strip():
                     all_texts.append(text)
                     all_sources.append(source)
-        
+
         return all_texts, all_sources
