@@ -4,7 +4,8 @@ from tqdm import tqdm
 
 from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
-from src.models import RagDataset, StudentSearchResults, MinimalSearchResults
+from src.models import RagDataset, StudentSearchResults, MinimalSearchResults,
+from src.models import StudentSearchResultsAndAnswer, MinimalAnswer
 
 sys.path.append(str(Path(__file__).parent.parent / "vllm-0.10.1"))
 from vllm import LLM, SamplingParams
@@ -162,8 +163,13 @@ class RagCLI:
         """
         Answer a single question with context passed to the LLM.
         """
-        model = LLM(model="Qwen/Qwen3-0.6B")
-        engine = SearchEngine()
+        try:
+            model = LLM(model="Qwen/Qwen3-0.6B")
+            engine = SearchEngine()
+        except Exception as e:
+            print(f"ERROR: Failed to initialize models: {e}")
+            return
+
         if not Path(index_path).exists():
             print(f"ERROR: Index not found at {index_path}. "
                   f"Please run the 'index' command first.")
@@ -175,24 +181,43 @@ class RagCLI:
 
         try:
             results = engine.query(query, top_k=k)
+            retrieved_sources = [res[0] for res in results]
+            context_text = "\n\n".join([text for _, text, _ in results])
         except Exception as e:
             print(f"ERROR during query: {e}")
-            return 
-        
-        context_text = "\n\n".join([text for _, text, _ in results])
-        prompt = f"""Tu es un assistant utile. Réponds UNIQUEMENT à partir du contexte suivant.
+            return
 
-        CONTEXTE:
+        prompt = f"""You are a helpful assistant. Answer the question based
+        ONLY on the following context.
+
+        CONTEXT:
         {context_text}
 
         QUESTION: {query}
 
-        RÉPONSE:"""
+        ANSWER:"""
 
-        outputs = model.generate([prompt], SamplingParams)
-        generated_text = outputs[0].outputs[0].text
-        print("\n--- RÉPONSE GÉNÉRÉE ---")
-        print(generated_text)
+        try:
+            outputs = model.generate([prompt], SamplingParams())
+            generated_text = outputs[0].outputs[0].text.strip()
+        except Exception as e:
+            print(f"ERROR during answer generation: {e}")
+            return
+
+        # Create the structured output
+        answer_obj = MinimalAnswer(
+            question_id="single_query",
+            question=query,
+            retrieved_sources=retrieved_sources,
+            answer=generated_text
+        )
+
+        final_output = StudentSearchResultsAndAnswer(
+            search_results=[answer_obj],
+            k=k
+        )
+
+        print(final_output.model_dump_json(indent=4))
 
     def answer_dataset(self,
                        student_search_results_path: str,

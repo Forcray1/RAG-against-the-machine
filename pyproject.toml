@@ -24,7 +24,6 @@ dependencies = [
 [tool.uv.sources]
 vllm = { path = "vllm-0.10.1", editable = true }
 
-# Correction ici : Suppression de 'tool.uv' devant dependency-groups
 [dependency-groups]
 dev = [
     "flake8>=6.0.0",
