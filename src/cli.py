@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
@@ -160,8 +161,8 @@ class RagCLI:
         """
         Answer a single question with context passed to the LLM.
         """
-        from transformers import AutoModelForCausalLM, AutoTokenizer
 
+        # Load the LLM model and tokenizer
         model_name = "Qwen/Qwen3-0.6B"
 
         try:
@@ -172,6 +173,7 @@ class RagCLI:
             print(f"ERROR: Failed to initialize models: {e}")
             return
 
+        # Load BM25 index from disk
         if not Path(index_path).exists():
             print(f"ERROR: Index not found at {index_path}. "
                   f"Please run the 'index' command first.")
@@ -181,6 +183,7 @@ class RagCLI:
         engine.load(index_path)
         print(f"SEARCHING FOR: '{query}'")
 
+        # Retrieve top-k relevant chunks and build a context string
         try:
             results = engine.query(query, top_k=k)
             retrieved_sources = [res[0] for res in results]
@@ -189,6 +192,7 @@ class RagCLI:
             print(f"ERROR during query: {e}")
             return
 
+        # Build the prompt with retrieved context
         prompt = f"""You are a helpful assistant. Answer the question based
         ONLY on the following context.
 
@@ -199,6 +203,7 @@ class RagCLI:
 
         ANSWER:"""
 
+        # Generate the answer using the LLM
         try:
             inputs = tokenizer(prompt, return_tensors="pt")
             outputs = model.generate(**inputs, max_new_tokens=512)
@@ -210,7 +215,7 @@ class RagCLI:
             print(f"ERROR during answer generation: {e}")
             return
 
-        # Create the structured output
+        # Wrap everything in the structured output model and print
         answer_obj = MinimalAnswer(
             question_id="single_query",
             question=query,
