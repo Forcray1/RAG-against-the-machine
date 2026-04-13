@@ -4,11 +4,8 @@ from tqdm import tqdm
 
 from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
-from src.models import RagDataset, StudentSearchResults, MinimalSearchResults,
+from src.models import RagDataset, StudentSearchResults, MinimalSearchResults
 from src.models import StudentSearchResultsAndAnswer, MinimalAnswer
-
-sys.path.append(str(Path(__file__).parent.parent / "vllm-0.10.1"))
-from vllm import LLM, SamplingParams
 
 DATA_PATH_DEFAULT = "vllm-0.10.1"
 INDEX_PATH_DEFAULT = "data/index_vllm"
@@ -163,8 +160,13 @@ class RagCLI:
         """
         Answer a single question with context passed to the LLM.
         """
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        model_name = "Qwen/Qwen3-0.6B"
+
         try:
-            model = LLM(model="Qwen/Qwen3-0.6B")
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            model = AutoModelForCausalLM.from_pretrained(model_name)
             engine = SearchEngine()
         except Exception as e:
             print(f"ERROR: Failed to initialize models: {e}")
@@ -198,8 +200,12 @@ class RagCLI:
         ANSWER:"""
 
         try:
-            outputs = model.generate([prompt], SamplingParams())
-            generated_text = outputs[0].outputs[0].text.strip()
+            inputs = tokenizer(prompt, return_tensors="pt")
+            outputs = model.generate(**inputs, max_new_tokens=512)
+            generated_text = tokenizer.decode(
+                outputs[0][inputs.input_ids.shape[1]:],
+                skip_special_tokens=True
+            ).replace('\\n', '\n').strip()
         except Exception as e:
             print(f"ERROR during answer generation: {e}")
             return

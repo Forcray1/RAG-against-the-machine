@@ -18,11 +18,14 @@ dependencies = [
     "numpy>=1.24.0",
     "langchain>=0.1.0",
     "tokenizers>=0.15.0",
-    "vllm",
 ]
 
 [tool.uv.sources]
-vllm = { path = "vllm-0.10.1", editable = true }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 
 [dependency-groups]
 dev = [
