@@ -39,7 +39,8 @@ class SearchEngine:
         corpus_tokens = self._tokenize(texts)
 
         self.retriever = bm25s.BM25(corpus=texts)
-        self.retriever.index(corpus_tokens)
+        if self.retriever:
+            self.retriever.index(corpus_tokens)
         print(f"Indexation terminée : {len(texts)} chunks indexés.")
 
     def save(self, path: str) -> None:

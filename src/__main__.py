@@ -2,7 +2,7 @@ import fire
 from src.cli import RagCLI
 
 
-def main():
+def main() -> None:
     """
     Main entry point for the RAG-against-the-machine CLI.
     """

@@ -1,6 +1,7 @@
 import re
 import sys
 from pathlib import Path
+from typing import Any
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import StoppingCriteria, StoppingCriteriaList
@@ -23,7 +24,7 @@ class RagCLI:
     def index(self,
               max_chunk_size: int = 2000,
               data_path: str = DATA_PATH_DEFAULT,
-              index_path: str = INDEX_PATH_DEFAULT):
+              index_path: str = INDEX_PATH_DEFAULT) -> None:
         """
         Index the repository and create a searchable knowledge base.
         """
@@ -50,7 +51,7 @@ class RagCLI:
     def search(self,
                query: str,
                k: int = 10,
-               index_path: str = INDEX_PATH_DEFAULT):
+               index_path: str = INDEX_PATH_DEFAULT) -> None:
         """
         Search for a single query using the indexed documents.
         """
@@ -81,7 +82,7 @@ class RagCLI:
                        dataset_path: str,
                        k: int,
                        save_directory: str,
-                       index_path: str = INDEX_PATH_DEFAULT):
+                       index_path: str = INDEX_PATH_DEFAULT) -> None:
         """
         Process multiple questions from a JSON dataset and output
         search results.
@@ -159,7 +160,7 @@ class RagCLI:
     def answer(self,
                query: str,
                k: int = 10,
-               index_path: str = INDEX_PATH_DEFAULT):
+               index_path: str = INDEX_PATH_DEFAULT) -> None:
         """
         Answer a single question with context passed to the LLM.
         """
@@ -194,6 +195,29 @@ class RagCLI:
             print(f"ERROR during query: {e}")
             return
 
+        all_scores = [score for _, _, score in results]
+        top_score = all_scores[0]
+        avg_score = sum(all_scores) / len(all_scores)
+        dominance_ratio = top_score / avg_score if avg_score > 0 else 0
+
+        # Reject if the average score is too low
+        # or if one rare term inflates the top score far above the others
+        if avg_score < 5 or dominance_ratio > 1.5:
+            source, text, score = results[0]
+            print("\nNo relevant informations found, "
+                  "Can't answer efficiently on this question")
+            print(f"Top score: {top_score:.2f} | "
+                  f"Avg score: {avg_score:.2f} | "
+                  f"Dominance ratio: {dominance_ratio:.2f}")
+            print(f"\n[Result #1] - Score: {score:.2f}")
+            print(f"File: {source.file_path}")
+            print(f"Indices: {source.first_character_index} "
+                  f"to {source.last_character_index}")
+            print("-" * 20)
+            print(text[:300].strip() + "...")
+            print("-" * 20)
+            return
+
         # Limit context size to avoid bloated prompts
         max_context_chars = 3000
         if len(context_text) > max_context_chars:
@@ -212,22 +236,27 @@ class RagCLI:
                                  add_special_tokens=False).input_ids
 
             class StopOnTokens(StoppingCriteria):
-                def __call__(self, input_ids, scores, **kwargs):
+                #  scores and **kwargs are here to match the def
+                def __call__(self,
+                             input_ids: Any,
+                             scores: Any,
+                             **kwargs: Any
+                             ) -> bool:
                     ids = input_ids[0].tolist()
                     if len(ids) >= len(stop_ids):
                         return ids[-len(stop_ids):] == stop_ids
                     return False
 
-            outputs = model.generate(
+            outputs = model.generate(  # type: ignore[misc]
                 **inputs,
                 max_new_tokens=128,
                 repetition_penalty=1.3,
                 stopping_criteria=StoppingCriteriaList([StopOnTokens()]),
             )
-            raw_text = tokenizer.decode(
+            raw_text = str(tokenizer.decode(
                 outputs[0][inputs.input_ids.shape[1]:],
                 skip_special_tokens=False
-            )
+            ))
             # Strip Qwen3 thinking block to avoid duplicate answer
             generated_text = re.sub(
                 r'<think>.*?</think>', '', raw_text, flags=re.DOTALL
@@ -262,7 +291,7 @@ class RagCLI:
                        student_search_results_path: str,
                        save_directory: str,
                        data_path: str = DATA_PATH_DEFAULT,
-                       max_context_chars: int = 3000):
+                       max_context_chars: int = 3000) -> None:
         """
         Generate answers from search results and output structured JSON.
         """
@@ -299,14 +328,15 @@ class RagCLI:
         # avec k = student_results.k
         # Créer le répertoire save_directory (mkdir parents=True)
         # Sauvegarder le JSON dans save_directory / nom_du_fichier_source
-        # Afficher confirmation : "Saved student_search_results_and_answer to <path>"
+        # Afficher confirmation :
+        # "Saved student_search_results_and_answer to <path>"
         pass
 
     def evaluate(self,
                  student_answer_path: str,
                  dataset_path: str,
                  k: int,
-                 max_context_length: int = 2000):
+                 max_context_length: int = 2000) -> None:
         """
         Evaluate search results quality against ground truth (Recall@k).
         """
