@@ -1,15 +1,17 @@
+import re
 import sys
 from pathlib import Path
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import StoppingCriteria, StoppingCriteriaList
 
 from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
 from src.models import RagDataset, StudentSearchResults, MinimalSearchResults
 from src.models import StudentSearchResultsAndAnswer, MinimalAnswer
 
-DATA_PATH_DEFAULT = "vllm-0.10.1"
-INDEX_PATH_DEFAULT = "data/index_vllm"
+DATA_PATH_DEFAULT = "data/raw/vllm-0.10.1"
+INDEX_PATH_DEFAULT = "data/processed/bm25_index"
 
 
 class RagCLI:
@@ -192,25 +194,51 @@ class RagCLI:
             print(f"ERROR during query: {e}")
             return
 
+        # Limit context size to avoid bloated prompts
+        max_context_chars = 3000
+        if len(context_text) > max_context_chars:
+            context_text = context_text[:max_context_chars]
+
         # Build the prompt with retrieved context
-        prompt = f"""You are a helpful assistant. Answer the question based
-        ONLY on the following context.
-
-        CONTEXT:
-        {context_text}
-
-        QUESTION: {query}
-
-        ANSWER:"""
+        prompt = ("You are a helpful assistant. Answer the question concisely "
+                  "in 1-3 sentences based ONLY on the following context.\n\n"
+                  f"CONTEXT:\n{context_text}\n\n"
+                  f"QUESTION: {query}\n\nANSWER:")
 
         # Generate the answer using the LLM
         try:
             inputs = tokenizer(prompt, return_tensors="pt")
-            outputs = model.generate(**inputs, max_new_tokens=512)
-            generated_text = tokenizer.decode(
+            stop_ids = tokenizer("\nAnswer:",
+                                 add_special_tokens=False).input_ids
+
+            class StopOnTokens(StoppingCriteria):
+                def __call__(self, input_ids, scores, **kwargs):
+                    ids = input_ids[0].tolist()
+                    if len(ids) >= len(stop_ids):
+                        return ids[-len(stop_ids):] == stop_ids
+                    return False
+
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=128,
+                repetition_penalty=1.3,
+                stopping_criteria=StoppingCriteriaList([StopOnTokens()]),
+            )
+            raw_text = tokenizer.decode(
                 outputs[0][inputs.input_ids.shape[1]:],
-                skip_special_tokens=True
-            ).replace('\\n', '\n').strip()
+                skip_special_tokens=False
+            )
+            # Strip Qwen3 thinking block to avoid duplicate answer
+            generated_text = re.sub(
+                r'<think>.*?</think>', '', raw_text, flags=re.DOTALL
+            )
+            # Remove remaining special tokens
+            generated_text = re.sub(r'<\|[^|]*\|>', '', generated_text)
+            # Cut off at any repeated "Answer:" or "Question:" block
+            generated_text = re.split(
+                r'\n\s*(?:Answer:|Question:)', generated_text
+            )[0]
+            generated_text = generated_text.replace('\\n', '\n').strip()
         except Exception as e:
             print(f"ERROR during answer generation: {e}")
             return
@@ -228,17 +256,51 @@ class RagCLI:
             k=k
         )
 
-        print(final_output.model_dump_json(indent=4))
+        print(final_output.model_dump_json(indent=2))
 
     def answer_dataset(self,
                        student_search_results_path: str,
-                       save_directory: str):
+                       save_directory: str,
+                       data_path: str = DATA_PATH_DEFAULT,
+                       max_context_chars: int = 3000):
         """
         Generate answers from search results and output structured JSON.
         """
-        print("[TODO] Implement answer_dataset")
-        print(f"  Search results path: {student_search_results_path}")
-        print(f"  Save directory: {save_directory}")
+        # Vérifier que le fichier student_search_results_path existe
+        # Si non -> print erreur et return
+        # Lire et parser le JSON en StudentSearchResults
+        # (model_validate_json), gérer l'exception si le JSON est invalide
+        # Afficher combien de questions ont été chargées (comme le sujet)
+        # Charger le tokenizer et le modèle LLM (même modèle que answer)
+        # Gérer l'exception si le chargement échoue
+        # Préparer le StoppingCriteria (même logique que answer)
+        # pour stopper la génération sur "\nAnswer:"
+        # Boucle sur chaque item dans student_results.search_results
+        # avec tqdm pour la barre de progression
+        # Pour chaque item, construire le contexte texte :
+        #   - Pour chaque source dans item.retrieved_sources :
+        #     * Construire le chemin du fichier (data_path / file_path)
+        #     * Lire le fichier et extraire les caractères
+        #        [first_character_index : last_character_index]
+        #     * Ajouter ce chunk à une liste context_parts
+        #   - Joindre les parties avec "\n\n"
+        #   - Tronquer à max_context_chars si trop long
+        # Construire le prompt (même structure que answer) :
+        #   "You are a helpful assistant. Answer concisely..."
+        #    + CONTEXT + QUESTION + ANSWER:
+        # Tokenizer le prompt, générer avec model.generate()
+        #   Décoder, nettoyer le bloc <think>...</think>,
+        #   supprimer les tokens spéciaux restants,
+        #   couper au premier "\nAnswer:" ou "\nQuestion:"
+        #  Construire un objet MinimalAnswer avec :
+        #   question_id, question, retrieved_sources, answer
+        #   L'ajouter à une liste all_answers
+        # Wrapper all_answers dans StudentSearchResultsAndAnswer
+        # avec k = student_results.k
+        # Créer le répertoire save_directory (mkdir parents=True)
+        # Sauvegarder le JSON dans save_directory / nom_du_fichier_source
+        # Afficher confirmation : "Saved student_search_results_and_answer to <path>"
+        pass
 
     def evaluate(self,
                  student_answer_path: str,
