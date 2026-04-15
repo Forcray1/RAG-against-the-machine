@@ -1,8 +1,10 @@
-import re
 import sys
 from pathlib import Path
 from typing import Any
 from tqdm import tqdm
+import time
+import torch
+from llama_cpp import Llama
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import StoppingCriteria, StoppingCriteriaList
 
@@ -165,13 +167,18 @@ class RagCLI:
         Answer a single question with context passed to the LLM.
         """
 
-        # Load the LLM model and tokenizer
-        model_name = "Qwen/Qwen3-0.6B"
+        # Load quantized GGUF model via llama-cpp (fast CPU inference)
+        model_name = "Qwen/Qwen3-0.6B-GGUF"
+        filename = "*.gguf"
 
         try:
-            tokenizer = AutoTokenizer.from_pretrained(model_name)
-            model = AutoModelForCausalLM.from_pretrained(model_name,
-                                                         torch_dtype="auto")
+            llm = Llama.from_pretrained(
+                repo_id=model_name,
+                filename=filename,
+                n_ctx=1024,
+                n_threads=None,  # use all cores
+                verbose=False,
+            )
             engine = SearchEngine()
         except Exception as e:
             print(f"ERROR: Failed to initialize models: {e}")
@@ -187,6 +194,7 @@ class RagCLI:
         engine.load(index_path)
         print(f"SEARCHING FOR: '{query}'")
 
+        t = time .perf_counter()
         # Retrieve top-k relevant chunks and build a context string
         try:
             results = engine.query(query, top_k=k)
@@ -219,59 +227,36 @@ class RagCLI:
             print("-" * 20)
             return
 
-        # Limit context size to avoid bloated prompts
-        max_context_chars = 1500
+        # Limit context size to avoid bloated prompts and slow prefill
+        max_context_chars = 700
         if len(context_text) > max_context_chars:
             context_text = context_text[:max_context_chars]
 
-        # Build the prompt with retrieved context
-        prompt = ("You are a helpful assistant. Answer the question concisely "
-                  "in 1-3 sentences based ONLY on the following context.\n\n"
-                  f"CONTEXT:\n{context_text}\n\n"
-                  f"QUESTION: {query}\n\nANSWER:")
+        # Build Qwen3 prompt manually — pre-fill empty <think> block
+        # so the model skips thinking and answers directly
+        prompt = (
+            f"<|im_start|>system\n"
+            f"You are a helpful assistant. Answer the question concisely "
+            f"in 1-3 sentences based ONLY on the following context.\n\n"
+            f"CONTEXT:\n{context_text}\n"
+            f"<|im_end|>\n"
+            f"<|im_start|>user\n{query}<|im_end|>\n"
+            f"<|im_start|>assistant\n<think>\n\n</think>\n"
+        )
 
-        # Generate the answer using the LLM
+        # Generate the answer using llama-cpp
         try:
-            inputs = tokenizer(prompt, return_tensors="pt")
-            stop_ids = tokenizer("\nAnswer:",
-                                 add_special_tokens=False).input_ids
-
-            class StopOnTokens(StoppingCriteria):
-                #  scores and **kwargs are here to match the def
-                def __call__(self,
-                             input_ids: Any,
-                             scores: Any,
-                             **kwargs: Any
-                             ) -> bool:
-                    ids = input_ids[0].tolist()
-                    if len(ids) >= len(stop_ids):
-                        return ids[-len(stop_ids):] == stop_ids
-                    return False
-
-            outputs = model.generate(  # type: ignore[misc]
-                **inputs,
-                max_new_tokens=64,
-                do_sample=False,
-                repetition_penalty=1.3,
-                stopping_criteria=StoppingCriteriaList([StopOnTokens()]),
+            response = llm.create_completion(
+                prompt=prompt,
+                max_tokens=48,
+                temperature=0.0,
+                stop=["<|im_end|>", "<|endoftext|>"],
             )
-            raw_text = str(tokenizer.decode(
-                outputs[0][inputs.input_ids.shape[1]:],
-                skip_special_tokens=False
-            ))
-            # Strip Qwen3 thinking block to avoid duplicate answer
-            generated_text = re.sub(
-                r'<think>.*?</think>', '', raw_text, flags=re.DOTALL
-            )
-            # Remove remaining special tokens
-            generated_text = re.sub(r'<\|[^|]*\|>', '', generated_text)
-            # Cut off at any repeated "Answer:" or "Question:" block
-            generated_text = re.split(
-                r'\n\s*(?:Answer:|Question:)', generated_text
-            )[0]
-            generated_text = generated_text.replace('\\n', '\n').strip()
+            generated_text = response["choices"][0]["text"].strip()
         except Exception as e:
             print(f"ERROR during answer generation: {e}")
+            f = time.perf_counter() - t
+            print(f"time: {f:.2f}")
             return
 
         # Wrap everything in the structured output model and print
@@ -288,6 +273,8 @@ class RagCLI:
         )
 
         print(final_output.model_dump_json(indent=2))
+        f = time.perf_counter() - t
+        print(f"time: {f:.2f}")
 
     def answer_dataset(self,
                        student_search_results_path: str,
@@ -316,7 +303,12 @@ class RagCLI:
         model_name = "Qwen/Qwen3-0.6B"
         try:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
-            model = AutoModelForCausalLM.from_pretrained(model_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                dtype=torch.float16,
+            ).to(device)
+            model = torch.compile(model)
         except Exception as e:
             print(f"ERROR: Failed to load model '{model_name}': {e}")
             return
