@@ -170,7 +170,8 @@ class RagCLI:
 
         try:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
-            model = AutoModelForCausalLM.from_pretrained(model_name)
+            model = AutoModelForCausalLM.from_pretrained(model_name,
+                                                         torch_dtype="auto")
             engine = SearchEngine()
         except Exception as e:
             print(f"ERROR: Failed to initialize models: {e}")
@@ -219,7 +220,7 @@ class RagCLI:
             return
 
         # Limit context size to avoid bloated prompts
-        max_context_chars = 3000
+        max_context_chars = 1500
         if len(context_text) > max_context_chars:
             context_text = context_text[:max_context_chars]
 
@@ -249,7 +250,8 @@ class RagCLI:
 
             outputs = model.generate(  # type: ignore[misc]
                 **inputs,
-                max_new_tokens=128,
+                max_new_tokens=64,
+                do_sample=False,
                 repetition_penalty=1.3,
                 stopping_criteria=StoppingCriteriaList([StopOnTokens()]),
             )
@@ -295,15 +297,47 @@ class RagCLI:
         """
         Generate answers from search results and output structured JSON.
         """
-        # Vérifier que le fichier student_search_results_path existe
-        # Si non -> print erreur et return
-        # Lire et parser le JSON en StudentSearchResults
-        # (model_validate_json), gérer l'exception si le JSON est invalide
-        # Afficher combien de questions ont été chargées (comme le sujet)
-        # Charger le tokenizer et le modèle LLM (même modèle que answer)
-        # Gérer l'exception si le chargement échoue
-        # Préparer le StoppingCriteria (même logique que answer)
-        # pour stopper la génération sur "\nAnswer:"
+        results_file = Path(student_search_results_path)
+        if not results_file.exists():
+            print(f"ERROR: File not found at {student_search_results_path}")
+            return
+
+        try:
+            with open(results_file, "r", encoding="utf-8") as f:
+                student_results = StudentSearchResults.model_validate_json(f)
+        except Exception as e:
+            print(f"ERROR: Failed to parse student search results JSON: {e}")
+            return
+
+        print(f"Loaded {len(student_results.search_results)} questions "
+              f"from {student_search_results_path}")
+
+        # Load the LLM model and tokenizer
+        model_name = "Qwen/Qwen3-0.6B"
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            model = AutoModelForCausalLM.from_pretrained(model_name)
+        except Exception as e:
+            print(f"ERROR: Failed to load model '{model_name}': {e}")
+            return
+
+        # Prepare StoppingCriteria — stop generation on "\nAnswer:"
+        stop_ids = tokenizer("\nAnswer:", add_special_tokens=False).input_ids
+
+        class StopOnTokens(StoppingCriteria):
+            def __call__(self,
+                         input_ids: Any,
+                         scores: Any,
+                         **kwargs: Any) -> bool:
+                ids = input_ids[0].tolist()
+                if len(ids) >= len(stop_ids):
+                    return ids[-len(stop_ids):] == stop_ids
+                return False
+
+        stopping_criteria = StoppingCriteriaList([StopOnTokens()])
+
+        all_answers = []
+
         # Boucle sur chaque item dans student_results.search_results
         # avec tqdm pour la barre de progression
         # Pour chaque item, construire le contexte texte :
@@ -330,7 +364,6 @@ class RagCLI:
         # Sauvegarder le JSON dans save_directory / nom_du_fichier_source
         # Afficher confirmation :
         # "Saved student_search_results_and_answer to <path>"
-        pass
 
     def evaluate(self,
                  student_answer_path: str,
