@@ -13,6 +13,7 @@ debug:
 clean:
 	rm -rf data/processed/*
 	rm -rf data/output/*
+	rm -rf output
 	rm -rf .venv
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type d -name ".mypy_cache" -exec rm -rf {} +

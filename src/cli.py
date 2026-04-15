@@ -1,12 +1,8 @@
 import sys
 from pathlib import Path
-from typing import Any
 from tqdm import tqdm
 import time
-import torch
 from llama_cpp import Llama
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers import StoppingCriteria, StoppingCriteriaList
 
 from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
@@ -24,7 +20,7 @@ class RagCLI:
     """
 
     def index(self,
-              max_chunk_size: int = 2000,
+              max_chunk_size: int = 800,
               data_path: str = DATA_PATH_DEFAULT,
               index_path: str = INDEX_PATH_DEFAULT) -> None:
         """
@@ -194,7 +190,7 @@ class RagCLI:
         engine.load(index_path)
         print(f"SEARCHING FOR: '{query}'")
 
-        t = time .perf_counter()
+        t = time.perf_counter()
         # Retrieve top-k relevant chunks and build a context string
         try:
             results = engine.query(query, top_k=k)
@@ -278,11 +274,12 @@ class RagCLI:
 
     def answer_dataset(self,
                        student_search_results_path: str,
-                       save_directory: str,
+                       save_directory: str = "output/answer_dataset",
                        data_path: str = DATA_PATH_DEFAULT,
-                       max_context_chars: int = 3000) -> None:
+                       max_context_chars: int = 700) -> None:
         """
         Generate answers from search results and output structured JSON.
+        Expects a StudentSearchResults JSON (output of search_dataset).
         """
         results_file = Path(student_search_results_path)
         if not results_file.exists():
@@ -290,8 +287,9 @@ class RagCLI:
             return
 
         try:
-            with open(results_file, "r", encoding="utf-8") as f:
-                student_results = StudentSearchResults.model_validate_json(f)
+            student_results = StudentSearchResults.model_validate_json(
+                results_file.read_text(encoding="utf-8")
+            )
         except Exception as e:
             print(f"ERROR: Failed to parse student search results JSON: {e}")
             return
@@ -299,63 +297,90 @@ class RagCLI:
         print(f"Loaded {len(student_results.search_results)} questions "
               f"from {student_search_results_path}")
 
-        # Load the LLM model and tokenizer
-        model_name = "Qwen/Qwen3-0.6B"
+        # Load quantized GGUF model via llama-cpp (fast CPU inference)
         try:
-            tokenizer = AutoTokenizer.from_pretrained(model_name)
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                dtype=torch.float16,
-            ).to(device)
-            model = torch.compile(model)
+            llm = Llama.from_pretrained(
+                repo_id="Qwen/Qwen3-0.6B-GGUF",
+                filename="*.gguf",
+                n_ctx=1024,
+                n_threads=None,
+                verbose=False,
+            )
         except Exception as e:
-            print(f"ERROR: Failed to load model '{model_name}': {e}")
+            print(f"ERROR: Failed to load model: {e}")
             return
 
-        # Prepare StoppingCriteria — stop generation on "\nAnswer:"
-        stop_ids = tokenizer("\nAnswer:", add_special_tokens=False).input_ids
-
-        class StopOnTokens(StoppingCriteria):
-            def __call__(self,
-                         input_ids: Any,
-                         scores: Any,
-                         **kwargs: Any) -> bool:
-                ids = input_ids[0].tolist()
-                if len(ids) >= len(stop_ids):
-                    return ids[-len(stop_ids):] == stop_ids
-                return False
-
-        stopping_criteria = StoppingCriteriaList([StopOnTokens()])
-
         all_answers = []
+        t_total = time.perf_counter()
 
-        # Boucle sur chaque item dans student_results.search_results
-        # avec tqdm pour la barre de progression
-        # Pour chaque item, construire le contexte texte :
-        #   - Pour chaque source dans item.retrieved_sources :
-        #     * Construire le chemin du fichier (data_path / file_path)
-        #     * Lire le fichier et extraire les caractères
-        #        [first_character_index : last_character_index]
-        #     * Ajouter ce chunk à une liste context_parts
-        #   - Joindre les parties avec "\n\n"
-        #   - Tronquer à max_context_chars si trop long
-        # Construire le prompt (même structure que answer) :
-        #   "You are a helpful assistant. Answer concisely..."
-        #    + CONTEXT + QUESTION + ANSWER:
-        # Tokenizer le prompt, générer avec model.generate()
-        #   Décoder, nettoyer le bloc <think>...</think>,
-        #   supprimer les tokens spéciaux restants,
-        #   couper au premier "\nAnswer:" ou "\nQuestion:"
-        #  Construire un objet MinimalAnswer avec :
-        #   question_id, question, retrieved_sources, answer
-        #   L'ajouter à une liste all_answers
-        # Wrapper all_answers dans StudentSearchResultsAndAnswer
-        # avec k = student_results.k
-        # Créer le répertoire save_directory (mkdir parents=True)
-        # Sauvegarder le JSON dans save_directory / nom_du_fichier_source
-        # Afficher confirmation :
-        # "Saved student_search_results_and_answer to <path>"
+        for item in tqdm(student_results.search_results, desc="Answering"):
+            t_q = time.perf_counter()
+
+            # Build context by reading source file slices
+            context_parts = []
+            for src in item.retrieved_sources:
+                src_file = Path(data_path) / src.file_path
+                try:
+                    file_text = src_file.read_text(encoding="utf-8",
+                                                   errors="ignore")
+                    chunk = file_text[src.first_character_index:
+                                     src.last_character_index]
+                    context_parts.append(chunk)
+                except Exception:
+                    continue
+            context_text = "\n\n".join(context_parts)
+            if len(context_text) > max_context_chars:
+                context_text = context_text[:max_context_chars]
+
+            # Build Qwen3 prompt with pre-filled empty <think> block
+            prompt = (
+                f"<|im_start|>system\n"
+                f"You are a helpful assistant. Answer the question concisely "
+                f"in 1-3 sentences based ONLY on the following context.\n\n"
+                f"CONTEXT:\n{context_text}\n"
+                f"<|im_end|>\n"
+                f"<|im_start|>user\n{item.question}<|im_end|>\n"
+                f"<|im_start|>assistant\n<think>\n\n</think>\n"
+            )
+
+            try:
+                response = llm.create_completion(
+                    prompt=prompt,
+                    max_tokens=48,
+                    temperature=0.0,
+                    stop=["<|im_end|>", "<|endoftext|>"],
+                )
+                answer_text = response["choices"][0]["text"].strip()
+            except Exception as e:
+                print(f"\nERROR generating answer for '{item.question_id}': {e}")
+                answer_text = ""
+
+            tqdm.write(f"  [{item.question_id}] {time.perf_counter() - t_q:.2f}s")
+            all_answers.append(MinimalAnswer(
+                question_id=item.question_id,
+                question=item.question,
+                retrieved_sources=item.retrieved_sources,
+                answer=answer_text,
+            ))
+
+        print(f"\nTotal time: {time.perf_counter() - t_total:.2f}s "
+              f"({len(all_answers)} questions)")
+
+        # Wrap and save results
+        final_output = StudentSearchResultsAndAnswer(
+            search_results=all_answers,
+            k=student_results.k,
+        )
+
+        save_dir = Path(save_directory)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        out_file = save_dir / Path(student_search_results_path).name
+        try:
+            out_file.write_text(final_output.model_dump_json(indent=4),
+                                encoding="utf-8")
+            print(f"\nSaved student_search_results_and_answer to {out_file}")
+        except Exception as e:
+            print(f"ERROR: Failed to save results: {e}")
 
     def evaluate(self,
                  student_answer_path: str,
