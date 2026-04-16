@@ -454,7 +454,8 @@ class RagCLI:
                 total_attendu += 1
 
         if total_attendu > 0:
+            recall = nb_trouvees_total / total_attendu
             print(f"Recall@{k} global : "
-                  f"{nb_trouvees_total / total_attendu:.3f}")
+                  f"{recall * 100}%")
         else:
             print("Aucune question trouvée dans le dataset !")
