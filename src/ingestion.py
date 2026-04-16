@@ -63,7 +63,9 @@ class Ingestor:
 
             for source, text in chunks:
                 if text.strip():
-                    all_texts.append(text)
+                    # We inject the filename into the text to increase BM25 hits
+                    enriched_text = f"File path: {display_path}\n\n{text}"
+                    all_texts.append(enriched_text)
                     all_sources.append(source)
 
         return all_texts, all_sources

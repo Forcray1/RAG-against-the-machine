@@ -1,5 +1,5 @@
 import uuid
-from typing import List
+from typing import List, Sequence
 from pydantic import BaseModel, Field
 
 
@@ -55,7 +55,7 @@ class StudentSearchResults(BaseModel):
     """
     Top 'k' aggregation metric for source retrievals per queries limit testing.
     """
-    search_results: List[MinimalSearchResults]
+    search_results: Sequence[MinimalSearchResults]
     k: int
 
 
@@ -63,4 +63,4 @@ class StudentSearchResultsAndAnswer(StudentSearchResults):
     """
     An interface handling query answers with evaluation pairs per sources.
     """
-    search_results: List[MinimalAnswer]
+    search_results: Sequence[MinimalAnswer]
