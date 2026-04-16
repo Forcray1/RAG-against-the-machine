@@ -8,7 +8,7 @@ from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
 from src.models import RagDataset, StudentSearchResults, MinimalSearchResults
 from src.models import StudentSearchResultsAndAnswer, MinimalAnswer
-from src.models import AnsweredQuestion
+from src.utils import calculate_overlap
 
 DATA_PATH_DEFAULT = "data/raw/vllm-0.10.1"
 INDEX_PATH_DEFAULT = "data/processed/bm25_index"
@@ -249,7 +249,10 @@ class RagCLI:
                 temperature=0.0,
                 stop=["<|im_end|>", "<|endoftext|>"],
             )
-            generated_text = response["choices"][0]["text"].strip()
+            # Type ignore since Llama-cpp type hints for choices can be tricky
+            generated_text = (
+                response["choices"][0]["text"].strip()  # type: ignore
+            )
         except Exception as e:
             print(f"ERROR during answer generation: {e}")
             f = time.perf_counter() - t
@@ -351,7 +354,9 @@ class RagCLI:
                     temperature=0.0,
                     stop=["<|im_end|>", "<|endoftext|>"],
                 )
-                answer_text = response["choices"][0]["text"].strip()
+                answer_text = (
+                    response["choices"][0]["text"].strip()  # type: ignore
+                )
             except Exception as e:
                 print(f"\nERROR generating answer for "
                       f"'{item.question_id}': {e}")
@@ -412,7 +417,7 @@ class RagCLI:
             return
 
         try:
-            valid_results = AnsweredQuestion.model_validate_json(
+            valid_results = RagDataset.model_validate_json(
                 valid_file.read_text(encoding="utf-8")
             )
         except Exception as e:
@@ -420,7 +425,36 @@ class RagCLI:
                   f"results JSON: {e}")
             return
 
-        print("[TODO] Implement evaluate (Recall@k overlapping characters)")
-        print(f"  Student answers: {student_answer_path}")
-        print(f"  Ground truth: {dataset_path}")
-        print(f"  k: {k}, max length: {max_context_length}")
+        student_results_dict = {res.question_id: res for
+                                res in student_results.search_results}
+
+        nb_trouvees_total: float = 0.0
+        total_attendu = 0
+        for question in valid_results.rag_questions:
+            correct = getattr(question, "sources", [])
+            student_answer = student_results_dict.get(question.question_id)
+            # Ne récupérer que les k premiers résultats demandés
+            if student_answer:
+                search = student_answer.retrieved_sources[:k]
+            else:
+                search = []
+
+            nb_trouvees_question = 0
+
+            for G in correct:
+                for R in search:
+                    if calculate_overlap(R, G) >= 0.05:
+                        nb_trouvees_question += 1
+                        break
+
+            # Formule pour Recall@k sur une question :
+            if len(correct) > 0:
+                recall_question = nb_trouvees_question / len(correct)
+                nb_trouvees_total += recall_question
+                total_attendu += 1
+
+        if total_attendu > 0:
+            print(f"Recall@{k} global : "
+                  f"{nb_trouvees_total / total_attendu:.3f}")
+        else:
+            print("Aucune question trouvée dans le dataset !")

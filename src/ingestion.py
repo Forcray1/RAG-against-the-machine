@@ -46,7 +46,7 @@ class Ingestor:
             if not file_path.is_file() or self.is_ignored(file_path):
                 continue
 
-            display_path = str(file_path.relative_to(root))
+            display_path = str(file_path)
             chunks = []
             try:
                 if file_path.suffix == ".py":

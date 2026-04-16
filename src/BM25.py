@@ -1,7 +1,7 @@
 import bm25s
 import pickle
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Any
 
 from src.models import MinimalSource
 
@@ -12,11 +12,11 @@ class SearchEngine:
     document indexing, saving, and retrieval.
     This links raw string segments with their Pydantic source definitions.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         self.retriever: Optional[bm25s.BM25] = None
         self.sources: List[MinimalSource] = []
 
-    def _tokenize(self, texts: List[str]):
+    def _tokenize(self, texts: List[str]) -> Any:
         """
         Cleans and splits texts recursively for building the
         """
@@ -111,9 +111,11 @@ class SearchEngine:
         for i in range(len(indices_top)):
             # Index extraction
             val = indices_top[i]
-            idx = int(val.get('id', val.get(
-                'index',
-                0))) if isinstance(val, dict) else int(val)
+            idx_val: Any = (
+                val.get('id', val.get('index', 0))
+                if isinstance(val, dict) else val
+            )
+            idx = int(idx_val)
 
             score = float(scores_top[i])
             source = self.sources[idx]
