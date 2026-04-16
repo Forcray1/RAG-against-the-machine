@@ -8,6 +8,7 @@ from src.ingestion import Ingestor
 from src.BM25 import SearchEngine
 from src.models import RagDataset, StudentSearchResults, MinimalSearchResults
 from src.models import StudentSearchResultsAndAnswer, MinimalAnswer
+from src.models import AnsweredQuestion
 
 DATA_PATH_DEFAULT = "data/raw/vllm-0.10.1"
 INDEX_PATH_DEFAULT = "data/processed/bm25_index"
@@ -324,7 +325,7 @@ class RagCLI:
                     file_text = src_file.read_text(encoding="utf-8",
                                                    errors="ignore")
                     chunk = file_text[src.first_character_index:
-                                     src.last_character_index]
+                                      src.last_character_index]
                     context_parts.append(chunk)
                 except Exception:
                     continue
@@ -352,10 +353,12 @@ class RagCLI:
                 )
                 answer_text = response["choices"][0]["text"].strip()
             except Exception as e:
-                print(f"\nERROR generating answer for '{item.question_id}': {e}")
+                print(f"\nERROR generating answer for "
+                      f"'{item.question_id}': {e}")
                 answer_text = ""
 
-            tqdm.write(f"  [{item.question_id}] {time.perf_counter() - t_q:.2f}s")
+            tqdm.write(f"  [{item.question_id}] "
+                       f"{time.perf_counter() - t_q:.2f}s")
             all_answers.append(MinimalAnswer(
                 question_id=item.question_id,
                 question=item.question,
@@ -390,6 +393,33 @@ class RagCLI:
         """
         Evaluate search results quality against ground truth (Recall@k).
         """
+        results_file = Path(student_answer_path)
+        if not results_file.exists():
+            print(f"ERROR: File not found at {student_answer_path}")
+            return
+
+        valid_file = Path(dataset_path)
+        if not valid_file.exists():
+            print(f"ERROR: File not found at {dataset_path}")
+            return
+
+        try:
+            student_results = StudentSearchResults.model_validate_json(
+                results_file.read_text(encoding="utf-8")
+            )
+        except Exception as e:
+            print(f"ERROR: Failed to parse student search results JSON: {e}")
+            return
+
+        try:
+            valid_results = AnsweredQuestion.model_validate_json(
+                valid_file.read_text(encoding="utf-8")
+            )
+        except Exception as e:
+            print(f"ERROR: Failed to parse answered questions search "
+                  f"results JSON: {e}")
+            return
+
         print("[TODO] Implement evaluate (Recall@k overlapping characters)")
         print(f"  Student answers: {student_answer_path}")
         print(f"  Ground truth: {dataset_path}")
