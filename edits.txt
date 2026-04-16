@@ -1,12 +1,1 @@
-import de torch et llama
-torch pour le GPU et llama pour le backend
-
-Au lieu de Modèle Qwen/Qwen3-0.6B en float16/float32, GGUF Qwen/Qwen3-0.6B-GGUF quantisé Q8_0
-
-On ne passe plus sur le cpu
-
-plus de passage en token puis de generer
-
-modifications des tokens envoye
-
-regex pour strip le bloc think et pas le generer
+UI and project finish except that I still need to do hard tests

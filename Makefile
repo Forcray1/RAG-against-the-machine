@@ -7,6 +7,9 @@ install:
 run:$
 	uv run python -m $(MODULE) $(filter-out $@,$(MAKECMDGOALS))
 
+run_menu:
+	uv run python -m src.UI.menu
+
 debug:
 	uv run python -m pdb src/main.py
 
@@ -30,4 +33,4 @@ lint-strict:
 %:
 	@:
 
-.PHONY: install run debug clean lint lint-strict
+.PHONY: install run debug clean lint lint-strict run_menu
