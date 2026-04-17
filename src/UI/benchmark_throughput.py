@@ -51,7 +51,7 @@ def test_warm_retrieval(dataset_path: str,
     print(f"Total time for 1000 questions: {total_time:.2f} seconds")
     print(f"Throughput: {1000 / total_time:.2f} queries / second")
 
-    print(f"{total_time}sec for the warm retrieval throughput")
+    print(f"{total_time:.2f}sec for the warm retrieval throughput")
 
 
 if __name__ == "__main__":
