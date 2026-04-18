@@ -26,25 +26,28 @@ The application pipeline acts dynamically across 4 main components:
 1. **Knowledge Base Ingestion**: Reads the target repository recursively, filtering ignored folders (`.git`, `__pycache__`, etc.).
 2. **Intelligent Chunking Strategy**: Dissects big documents into smaller contexts (max: 2000 characters parameterizable limit) preserving semantic structures.
 3. **Retrieving System (BM25)**: Transforms text into arrays of tokens, populates an inverted index and queries the top-k textual matching blocks on demand.
-4. **Answer Generation System**: Prompts `Qwen/Qwen3-0.6B` feeding it retrieved code-snippets to accurately formulate reliable technical responses.
+4. **Answer Generation System**: Prompts the `Qwen/Qwen3-0.6B` model using a quantized GGUF format and `llama_cpp` for fast CPU inference. Snippets retrieved are fed as context to accurately formulate reliable technical responses.
 
 ## Chunking Strategy
 To avoid splitting important functional contexts in the middle, two custom chunkers were written:
 - **`PythonChunker`**: Uses Python's internal `ast` (Abstract Syntax Tree) logic to walk through the files and chunk them elegantly by `ClassDef` and `FunctionDef`. Falls back to an overlapping size-based split for massive methods exceeding the length limit.
 - **`MdChunker`**: Uses `re` module rules to detect structural boundaries inside Markdown documents (headers: `#`, `##`...) and cuts chunks coherently.
 
-Both chunkers respect a parameterizable `max_chunk_size` (default: 2000 characters) and logic `overlap` to not lose variables cut midway. 
+Both chunkers respect a parameterizable `max_chunk_size` (default: 2000 characters) and a hardcoded logical `overlap` of 150 characters internally to prevent losing variables cut midway. 
 
 ## Retrieval Method
 We are utilizing **BM25**, a powerful evolution of the TF-IDF statistical method, operated efficiently via the `bm25s` library. BM25 evaluates the relevancy of files by mapping the occurrences of key terms in queries against their frequencies globally inside the corpus, with special logarithmic care avoiding "keyword-stuffing" bias from long files.
-
+4=
 ## Performance Analysis
+The evaluation of retrieval effectiveness is governed by the **Recall@k** metric. A retrieved document is deemed a hit only if its character coordinates (`first_character_index`, `last_character_index`) overlap by **at least 5%** against the true source ground truth annotations.
+
 *(Note: To be filled once `evaluate` is complete)*
 - **Indexing time**: `Around 5.5sec` (< 5 minutes target)
 - **Recall@5 (Docs Questions)**: `80%` (Target > 55%)
 - **Recall@5 (Code Questions)**: `61%` (Target > 45%)
 
 ## Design Decisions
+- **`llama_cpp` & Quantized Inference**: As pure local execution was a priority, pulling floating-point `transformers` implementations would be significantly slower and RAM-heavy. We explicitly opted for a **GGUF** model and `llama_cpp` bindings to heavily optimize local CPU inference speeds. 
 - **Pydantic**: Heavily utilized for data-validation, effectively avoiding silent runtime typing errors by strictly converting Search Results (`MinimalSource`, `StudentSearchResults`).
 - **Python Fire**: Chosen to auto-generate a comprehensive CLI mapping Python methods into callable terminal syntax without `argparse` overhead.
 - **UV Package Manager**: Chosen to dramatically speed-up dependencies installations scaling above `pip` restrictions.
@@ -53,25 +56,51 @@ We are utilizing **BM25**, a powerful evolution of the TF-IDF statistical method
 - Preserving source location index bounds (`first_character_index`, `last_character_index`) flawlessly post-chunking without off-by-one errors.
 - Handling empty, poorly formatted markdown components crashing regex captures.
 - Prompting logic implementation to bridge retrieved textual information sequentially inside the strict LLM max-token bounds.
+- Optimisation of the response time from the llm to stay in the subject asking
 
 ## Resources & AI Usage
 - **Documentation**: 
 - [Python AST Docs](https://docs.python.org/3/library/ast.html)
 - [bm25s Repository](https://github.com/xhluca/bm25s)
 - vLLM Architecture overviews.
+- **AI Usage**
+- AI was used to do repetitive task, such are type hints and return type. It has also been used as a toll for learning, and to unlock the progress when I've been stuck for too long.
 
 ## Example Usage
-You can use the RAG system directly through the CLI:
+You can use the RAG system directly through the CLI mapper:
 
 ### 1. Ingestion / Indexing
+Build a searchable index spanning the target repository.
 ```bash
 uv run python -m src index --max_chunk_size 2000
 ```
 ### 2. Live Search Output
+Perform a semantic match search against the BM25 logic to find context.
 ```bash
 uv run python -m src search "How does PagedAttention implement the KV cache?" --k 5
 ```
-### 3. Evaluating a generated dataset
+### 3. Search multiple questions via a Dataset
+Batch searches queries mapped in an unattended JSON file.
 ```bash
-uv run python -m src evaluate --student_answer_path data/results.json --dataset_path data/ground_truth.json --k 10
+uv run python -m src search_dataset --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json --k 10 --save_directory data/output/search_results
+```
+### 4. Answer a single query
+Generate an LLM answer bridging the context from the semantic search directly on your terminal.
+```bash
+uv run python -m src answer "How to configure OpenAI server?" --k 10
+```
+### 5. Answer a whole Dataset
+Leverage your `MinimalSearchResults` mappings to auto-generate answering queries back into an unallocated Dataset.
+```bash
+uv run python -m src answer_dataset --student_search_results_path data/output/search_results/dataset_docs_public.json --save_directory data/output/search_results_and_answer
+```
+### 6. Evaluating a generated dataset
+Score the precision mappings against the Ground Target sources annotations mapping the character shifts.
+```bash
+uv run python -m src evaluate --student_answer_path data/output/search_results/dataset_docs_public.json --dataset_path data/datasets/AnsweredQuestions/dataset_docs_public.json --k 10
+```
+
+### You can also start a User Interface, by launching the command :
+```bash
+make run_menu
 ```
