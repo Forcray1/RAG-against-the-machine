@@ -1,5 +1,5 @@
 PYTHON = python3
-MODULE = src.__main__
+MODULE = student.__main__
 
 install:
 	uv sync
@@ -8,10 +8,10 @@ run:$
 	uv run python -m $(MODULE) $(filter-out $@,$(MAKECMDGOALS))
 
 run_menu:
-	uv run python -m src.UI.menu
+	uv run python -m student.UI.menu
 
 debug:
-	uv run python -m pdb src/main.py
+	uv run python -m pdb student/main.py
 
 clean:
 	rm -rf data/processed/*
@@ -23,12 +23,12 @@ clean:
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
 
 lint:
-	uv run flake8 src
-	uv run mypy src --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	uv run flake8 student
+	uv run mypy student --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict:
-	uv run flake8 src
-	uv run mypy src --strict
+	uv run flake8 student
+	uv run mypy student --strict
 
 %:
 	@:

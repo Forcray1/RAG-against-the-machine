@@ -1,1 +1,2 @@
-UI and project finish except that I still need to do hard tests
+Changed order of files, and structures
+names and files are changed to be adapted to the new organisation
