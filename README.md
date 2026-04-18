@@ -43,8 +43,8 @@ The evaluation of retrieval effectiveness is governed by the **Recall@k** metric
 
 *(Note: To be filled once `evaluate` is complete)*
 - **Indexing time**: `Around 5.5sec` (< 5 minutes target)
-- **Recall@5 (Docs Questions)**: `80%` (Target > 55%)
-- **Recall@5 (Code Questions)**: `61%` (Target > 45%)
+- **Recall@5 (Docs Questions)**: `80%` (Target > 80%)
+- **Recall@5 (Code Questions)**: `61%` (Target > 50%)
 
 ## Design Decisions
 - **`llama_cpp` & Quantized Inference**: As pure local execution was a priority, pulling floating-point `transformers` implementations would be significantly slower and RAM-heavy. We explicitly opted for a **GGUF** model and `llama_cpp` bindings to heavily optimize local CPU inference speeds. 
