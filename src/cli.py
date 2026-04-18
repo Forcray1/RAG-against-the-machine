@@ -28,6 +28,7 @@ class RagCLI:
         Index the repository and create a searchable knowledge base.
         """
         print(f"--- Starting ingestion of {data_path} ---")
+        t = time.perf_counter()
         ingestor = Ingestor(max_chunk_size=max_chunk_size, overlap=150)
         engine = SearchEngine()
 
@@ -43,6 +44,8 @@ class RagCLI:
             print(f"Saving index to {index_path}...")
             engine.save(index_path)
             print("Ingestion complete!")
+            f = time.perf_counter() - t
+            print(f"time: {f:.2f}")
         except Exception as e:
             print(f"ERROR during ingestion: {e}")
             sys.exit(1)
@@ -123,7 +126,7 @@ class RagCLI:
                 # Format as the subject requires
                 minimal_res = MinimalSearchResults(
                     question_id=q.question_id,
-                    question=q.question,
+                    question_str=q.question,
                     retrieved_sources=retrieved_sources
                 )
                 all_results.append(minimal_res)
@@ -133,7 +136,7 @@ class RagCLI:
                 # Append empty results to maintain the alignment if query fails
                 all_results.append(MinimalSearchResults(
                     question_id=q.question_id,
-                    question=q.question,
+                    question_str=q.question,
                     retrieved_sources=[]
                 ))
 
@@ -262,7 +265,7 @@ class RagCLI:
         # Wrap everything in the structured output model and print
         answer_obj = MinimalAnswer(
             question_id="single_query",
-            question=query,
+            question_str=query,
             retrieved_sources=retrieved_sources,
             answer=generated_text
         )
@@ -343,7 +346,7 @@ class RagCLI:
                 f"in 1-3 sentences based ONLY on the following context.\n\n"
                 f"CONTEXT:\n{context_text}\n"
                 f"<|im_end|>\n"
-                f"<|im_start|>user\n{item.question}<|im_end|>\n"
+                f"<|im_start|>user\n{item.question_str}<|im_end|>\n"
                 f"<|im_start|>assistant\n<think>\n\n</think>\n"
             )
 
@@ -366,7 +369,7 @@ class RagCLI:
                        f"{time.perf_counter() - t_q:.2f}s")
             all_answers.append(MinimalAnswer(
                 question_id=item.question_id,
-                question=item.question,
+                question_str=item.question_str,
                 retrieved_sources=item.retrieved_sources,
                 answer=answer_text,
             ))

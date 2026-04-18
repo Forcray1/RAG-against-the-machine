@@ -40,9 +40,9 @@ We are utilizing **BM25**, a powerful evolution of the TF-IDF statistical method
 
 ## Performance Analysis
 *(Note: To be filled once `evaluate` is complete)*
-- **Indexing time**: `[To be recorded]` (< 5 minutes target)
-- **Recall@5 (Docs Questions)**: `[To be recorded]` (Target > 55%)
-- **Recall@5 (Code Questions)**: `[To be recorded]` (Target > 45%)
+- **Indexing time**: `Around 5.5sec` (< 5 minutes target)
+- **Recall@5 (Docs Questions)**: `80%` (Target > 55%)
+- **Recall@5 (Code Questions)**: `61%` (Target > 45%)
 
 ## Design Decisions
 - **Pydantic**: Heavily utilized for data-validation, effectively avoiding silent runtime typing errors by strictly converting Search Results (`MinimalSource`, `StudentSearchResults`).

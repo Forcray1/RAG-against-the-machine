@@ -40,7 +40,7 @@ class MinimalSearchResults(BaseModel):
     Struct specifying retrieved documents related to a certain inquiry.
     """
     question_id: str
-    question: str
+    question_str: str
     retrieved_sources: List[MinimalSource]
 
 
