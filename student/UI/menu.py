@@ -64,7 +64,7 @@ def menu() -> None:
                         "data/datasets/UnansweredQuestions/"
                         "dataset_docs_public.json",
                         10,
-                        "output/search_results"
+                        "data/output/search_results"
                         )
                     time.sleep(4)
                     break
@@ -73,7 +73,7 @@ def menu() -> None:
                         "data/datasets/UnansweredQuestions/"
                         "dataset_code_public.json",
                         10,
-                        "output/search_results"
+                        "data/output/search_results"
                         )
                     time.sleep(4)
                     break
@@ -82,8 +82,9 @@ def menu() -> None:
                     rag.search_dataset(
                         file_dataset,
                         10,
-                        "output/search_results"
+                        "data/output/search_results"
                         )
+                    time.sleep(4)
                     break
                 elif d == "4":
                     break
