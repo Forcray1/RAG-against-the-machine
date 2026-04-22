@@ -140,7 +140,7 @@ class RagCLI:
                 # engine's tuple (source, text, score)
                 retrieved_sources = [res[0] for res in results]
 
-                # Format as the subject requires
+                # Format as required
                 minimal_res = MinimalSearchResults(
                     question_id=q.question_id,
                     question_str=q.question,
@@ -269,7 +269,7 @@ class RagCLI:
                 temperature=0.0,
                 stop=["<|im_end|>", "<|endoftext|>"],
             )
-            # Type ignore since Llama-cpp type hints for choices can be tricky
+            # Type ignore since Llama-cpp type hints for choices are tricky
             generated_text = (
                 response["choices"][0]["text"].strip()  # type: ignore
             )
@@ -417,6 +417,7 @@ class RagCLI:
                  max_context_length: int = 2000) -> None:
         """
         Evaluate search results quality against ground truth (Recall@k).
+        Prints validation info, question counts, and Recall@1/3/5/k.
         """
         results_file = Path(student_answer_path)
         if not results_file.exists():
@@ -428,13 +429,17 @@ class RagCLI:
             print(f"ERROR: File not found at {dataset_path}")
             return
 
+        student_valid = False
         try:
             student_results = StudentSearchResults.model_validate_json(
                 results_file.read_text(encoding="utf-8")
             )
+            student_valid = True
         except Exception as e:
             print(f"ERROR: Failed to parse student search results JSON: {e}")
             return
+
+        print(f"Student data is valid: {student_valid}")
 
         try:
             valid_results = RagDataset.model_validate_json(
@@ -445,37 +450,57 @@ class RagCLI:
                   f"results JSON: {e}")
             return
 
+        total_questions = len(valid_results.rag_questions)
+        questions_with_sources = sum(
+            1 for q in valid_results.rag_questions
+            if getattr(q, "sources", [])
+        )
+        questions_with_student_sources = sum(
+            1 for r in student_results.search_results
+            if r.retrieved_sources
+        )
+
+        print(f"Total number of questions: {total_questions}")
+        print(f"Total number of questions with sources: "
+              f"{questions_with_sources}")
+        print(f"Total number of questions with student sources: "
+              f"{questions_with_student_sources}")
+
         student_results_dict = {res.question_id: res for
                                 res in student_results.search_results}
 
-        nb_trouvees_total: float = 0.0
-        total_attendu = 0
-        for question in valid_results.rag_questions:
-            correct = getattr(question, "sources", [])
-            student_answer = student_results_dict.get(question.question_id)
-            # Ne récupérer que les k premiers résultats demandés
-            if student_answer:
-                search = student_answer.retrieved_sources[:k]
-            else:
-                search = []
+        thresholds = sorted(set([1, 3, 5, k]))
 
-            nb_trouvees_question = 0
+        print("\nEvaluation Results")
+        print("=" * 40)
+        print(f"Questions evaluated: {questions_with_sources}")
 
-            for G in correct:
-                for R in search:
-                    if calculate_overlap(R, G) >= 0.05:
-                        nb_trouvees_question += 1
-                        break
+        for threshold in thresholds:
+            nb_trouvees_total: float = 0.0
+            total_attendu = 0
+            for question in valid_results.rag_questions:
+                correct = getattr(question, "sources", [])
+                if not correct:
+                    continue
+                student_answer = student_results_dict.get(
+                    question.question_id
+                )
+                search = (student_answer.retrieved_sources[:threshold]
+                          if student_answer else [])
 
-            # Formule pour Recall@k sur une question :
-            if len(correct) > 0:
+                nb_trouvees_question = 0
+                for G in correct:
+                    for R in search:
+                        if calculate_overlap(R, G) >= 0.05:
+                            nb_trouvees_question += 1
+                            break
+
                 recall_question = nb_trouvees_question / len(correct)
                 nb_trouvees_total += recall_question
                 total_attendu += 1
 
-        if total_attendu > 0:
-            recall = nb_trouvees_total / total_attendu
-            print(f"Recall@{k}: "
-                  f"{recall}")
-        else:
-            print("Aucune question trouvée dans le dataset !")
+            if total_attendu > 0:
+                recall = nb_trouvees_total / total_attendu
+                print(f"Recall@{threshold}: {recall:.3f}")
+            else:
+                print(f"Recall@{threshold}: N/A")

@@ -122,8 +122,6 @@ class SearchEngine:
 
             raw_content = self.retriever.corpus[idx]
 
-            # bm25s may store corpus items as dicts {'id': ..., 'text': ...}
-            # (especially after load_corpus=True), or as plain strings/lists
             if isinstance(raw_content, dict):
                 text = str(raw_content.get('text', ''))
             elif isinstance(raw_content, list):

@@ -42,7 +42,7 @@ We are utilizing **BM25**, a powerful evolution of the TF-IDF statistical method
 The evaluation of retrieval effectiveness is governed by the **Recall@k** metric. A retrieved document is deemed a hit only if its character coordinates (`first_character_index`, `last_character_index`) overlap by **at least 5%** against the true source ground truth annotations.
 
 *(Note: To be filled once `evaluate` is complete)*
-- **Indexing time**: `Around 5.5sec` (< 5 minutes target)
+- **Indexing time**: `To retest on other computers` (< 5 minutes target)
 - **Recall@5 (Docs Questions)**: `80%` (Target > 80%)
 - **Recall@5 (Code Questions)**: `61%` (Target > 50%)
 
