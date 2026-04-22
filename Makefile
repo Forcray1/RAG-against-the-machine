@@ -11,7 +11,7 @@ run_menu:
 	uv run python -m student.UI.menu
 
 debug:
-	uv run python -m pdb student/main.py
+	uv run python -m pdb student/__main__.py
 
 clean:
 	rm -rf data/processed/*
