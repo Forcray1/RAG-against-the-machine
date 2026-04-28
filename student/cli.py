@@ -298,7 +298,7 @@ class RagCLI:
 
     def answer_dataset(self,
                        student_search_results_path: str,
-                       save_directory: str = "output/answer_dataset",
+                       save_directory: str = "data/output/answer_dataset",
                        max_context_chars: int = 700) -> None:
         """
         Generate answers from search results and output structured JSON.
