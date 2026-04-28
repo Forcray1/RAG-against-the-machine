@@ -299,7 +299,6 @@ class RagCLI:
     def answer_dataset(self,
                        student_search_results_path: str,
                        save_directory: str = "output/answer_dataset",
-                       data_path: str = DATA_PATH_DEFAULT,
                        max_context_chars: int = 700) -> None:
         """
         Generate answers from search results and output structured JSON.
@@ -413,8 +412,8 @@ class RagCLI:
     def evaluate(self,
                  student_answer_path: str,
                  dataset_path: str,
-                 k: int,
-                 max_context_length: int = 2000) -> None:
+                 k: int
+                 ) -> None:
         """
         Evaluate search results quality against ground truth (Recall@k).
         Prints validation info, question counts, and Recall@1/3/5/k.

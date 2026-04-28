@@ -4,6 +4,9 @@ import time
 
 
 def menu() -> None:
+    """
+    User Interface for the RAG project, for easier interactions
+    """
     rag = RagCLI()
     index = False
     while True:

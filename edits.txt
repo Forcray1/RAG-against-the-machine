@@ -1,2 +1,1 @@
-Changed order of files, and structures
-names and files are changed to be adapted to the new organisation
+Cleaned unused variable and added docstrings for the UI

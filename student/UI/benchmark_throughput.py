@@ -7,6 +7,9 @@ from student.models import RagDataset
 def test_warm_retrieval(dataset_path: str,
                         index_path: str,
                         k: int = 10) -> None:
+    """
+    Function to test the warm retrieval output
+    """
     # Load the index and dataset (this is the "cold" overhead)
     print("Loading index and dataset...")
     engine = SearchEngine()
